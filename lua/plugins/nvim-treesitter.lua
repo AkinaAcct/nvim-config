@@ -1,79 +1,85 @@
 return {
-    "nvim-treesitter/nvim-treesitter",
-    version = false, -- last release is way too old and doesn't work on Windows
-    build = ":TSUpdate",
-    event = { "LazyFile", "VeryLazy" },
-    lazy = vim.fn.argc(-1) == 0, -- load treesitter early when opening a file from the cmdline
-    init = function(plugin)
-        -- PERF: add nvim-treesitter queries to the rtp and it's custom query predicates early
-        -- This is needed because a bunch of plugins no longer `require("nvim-treesitter")`, which
-        -- no longer trigger the **nvim-treesitter** module to be loaded in time.
-        -- Luckily, the only things that those plugins need are the custom queries, which we make available
-        -- during startup.
-        require("lazy.core.loader").add_to_rtp(plugin)
-        require("nvim-treesitter.query_predicates")
-    end,
-    cmd = { "TSUpdateSync", "TSUpdate", "TSInstall" },
-    keys = {
-        { "<c-space>", desc = "Increment Selection" },
-        { "<bs>",      desc = "Decrement Selection", mode = "x" },
+  "nvim-treesitter/nvim-treesitter",
+  branch = "main",
+  version = false, -- last release is way too old and doesn't work on Windows
+  build = function()
+    local TS = require("nvim-treesitter")
+    if not TS.get_installed then
+      LazyVim.error("Please restart Neovim and run `:TSUpdate` to use the `nvim-treesitter` **main** branch.")
+      return
+    end
+    vim.cmd.TSUpdate()
+  end,
+  lazy = vim.fn.argc(-1) == 0, -- load treesitter early when opening a file from the cmdline
+  event = { "LazyFile", "VeryLazy" },
+  cmd = { "TSUpdate", "TSInstall", "TSLog", "TSUninstall" },
+  opts_extend = { "ensure_installed" },
+  ---@class lazyvim.TSConfig: TSConfig
+  opts = {
+    -- LazyVim config for treesitter
+    ensure_installed = {
+      "bash",
+      "c",
+      "diff",
+      "html",
+      "javascript",
+      "jsdoc",
+      "json",
+      "jsonc",
+      "lua",
+      "luadoc",
+      "luap",
+      "markdown",
+      "markdown_inline",
+      "printf",
+      "python",
+      "query",
+      "regex",
+      "toml",
+      "tsx",
+      "typescript",
+      "vim",
+      "vimdoc",
+      "xml",
+      "yaml",
     },
-    opts_extend = { "ensure_installed" },
-    ---@type TSConfig
-    ---@diagnostic disable-next-line: missing-fields
-    opts = {
-        highlight = { enable = true },
-        indent = { enable = true },
-        ensure_installed = {
-            "bash",
-            "c",
-            "diff",
-            "html",
-            "javascript",
-            "jsdoc",
-            "json",
-            "jsonc",
-            "lua",
-            "luadoc",
-            "luap",
-            "markdown",
-            "markdown_inline",
-            "printf",
-            "python",
-            "query",
-            "regex",
-            "toml",
-            "tsx",
-            "typescript",
-            "vim",
-            "vimdoc",
-            "xml",
-            "yaml",
-        },
-        incremental_selection = {
-            enable = true,
-            keymaps = {
-                init_selection = "<C-space>",
-                node_incremental = "<C-space>",
-                scope_incremental = false,
-                node_decremental = "<bs>",
-            },
-        },
-        textobjects = {
-            move = {
-                enable = true,
-                goto_next_start = { ["]f"] = "@function.outer", ["]c"] = "@class.outer", ["]a"] = "@parameter.inner" },
-                goto_next_end = { ["]F"] = "@function.outer", ["]C"] = "@class.outer", ["]A"] = "@parameter.inner" },
-                goto_previous_start = { ["[f"] = "@function.outer", ["[c"] = "@class.outer", ["[a"] = "@parameter.inner" },
-                goto_previous_end = { ["[F"] = "@function.outer", ["[C"] = "@class.outer", ["[A"] = "@parameter.inner" },
-            },
-        },
-    },
-    ---@param opts TSConfig
-    config = function(_, opts)
-        if type(opts.ensure_installed) == "table" then
-            opts.ensure_installed = LazyVim.dedup(opts.ensure_installed)
+  },
+  ---@param opts lazyvim.TSConfig
+  config = function(_, opts)
+    local TS = require("nvim-treesitter")
+
+    -- some quick sanity checks
+    if not TS.get_installed then
+      return LazyVim.error("Please use `:Lazy` and update `nvim-treesitter`")
+    elseif vim.fn.executable("tree-sitter") == 0 then
+      return LazyVim.error({
+        "**treesitter-main** requires the `tree-sitter` CLI executable to be installed.",
+        "Run `:checkhealth nvim-treesitter` for more information.",
+      })
+    elseif type(opts.ensure_installed) ~= "table" then
+      return LazyVim.error("`nvim-treesitter` opts.ensure_installed must be a table")
+    end
+
+    -- setup treesitter
+    TS.setup(opts)
+
+    -- install missing parsers
+    local install = vim.tbl_filter(function(lang)
+      return not LazyVim.treesitter.have(lang)
+    end, opts.ensure_installed or {})
+    if #install > 0 then
+      TS.install(install, { summary = true }):await(function()
+        LazyVim.treesitter.get_installed(true) -- refresh the installed langs
+      end)
+    end
+
+    -- treesitter highlighting
+    vim.api.nvim_create_autocmd("FileType", {
+      callback = function(ev)
+        if LazyVim.treesitter.have(ev.match) then
+          pcall(vim.treesitter.start)
         end
-        require("nvim-treesitter.configs").setup(opts)
-    end,
+      end,
+    })
+  end,
 }
