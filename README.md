@@ -1,3 +1,5 @@
+# No longer maintained. If you really use this, I recommend you to use nvchad as a replacement
+
 ![socialify](https://socialify.git.ci/AkinaAcct/ANVim/image?description=1&forks=1&issues=1&name=1&owner=1&pulls=1&stargazers=1&theme=Dark)
 
 # ANVim
